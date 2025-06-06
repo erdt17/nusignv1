@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NusaSign - Translator Bisindo</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f0f2f5;
+            margin: 0;
+            padding: 0;
+            color: #333;
+        }
+        header {
+            background: linear-gradient(135deg, #00796b, #004d40);
+            color: white;
+            padding: 20px;
+            text-align: center;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        main {
+            max-width: 1200px;
+            margin: 20px auto;
+            padding: 20px;
+        }
+        .section {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        }
+        h1, h2 {
+            margin-top: 0;
+        }
+        .video-container {
+            position: relative;
+            width: 100%;
+            max-width: 640px;
+            margin: 0 auto;
+        }
+        #video {
+            width: 100%;
+            border-radius: 10px;
+            background: #000;
+        }
+        #canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+        .controls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin: 15px 0;
+            justify-content: center;
+        }
+        button, select, input {
+            padding: 10px 15px;
+            border-radius: 5px;
+            border: 1px solid #ddd;
+            background: white;
+            font-size: 16px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        button:hover, select:hover {
+            background: #f5f5f5;
+            border-color: #ccc;
+        }
+        button:active {
+            transform: translateY(1px);
+        }
+        button.primary {
+            background: #00796b;
+            color: white;
+            border: none;
+        }
+        button.primary:hover {
+            background: #00695c;
+        }
+        #outputText, #translatedText {
+            font-size: 1.5rem;
+            margin: 20px 0;
+            padding: 15px;
+            background: #f9f9f9;
+            border-radius: 5px;
+            text-align: center;
+            min-height: 1.5em;
+        }
+        #modelStatus {
+            padding: 8px 15px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            display: inline-block;
+            margin: 10px 0;
+        }
+        .model-loading { background: #ff9800; color: white; }
+        .model-ready { background: #4caf50; color: white; }
+        .model-error { background: #f44336; color: white; }
+        #spinner {
+            border: 4px solid rgba(0, 0, 0, 0.1);
+            border-radius: 50%;
+            border-top: 4px solid #00796b;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+            margin: 10px auto;
+            display: none;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .bookmark-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px;
+            border-bottom: 1px solid #eee;
+        }
+        .bookmark-item button {
+            background: #f44336;
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 3px;
+        }
+        .bookmark-item button:hover {
+            background: #d32f2f;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>NusaSign</h1>
+        <p>Translator Isyarat Bisindo & Sunda ↔ Indonesia + Bookmark</p>
+    </header>
+
+    <main>
+        <section class="section">
+            <h2>Deteksi Gestur Tangan (Bisindo)</h2>
+            <div class="controls">
+                <label for="modeSelect">Pilih Mode:</label>
+                <select id="modeSelect">
+                    <option value="alphabet">Alfabet</option>
+                    <option value="word">Kosakata</option>
+                </select>
+                <button onclick="clearBuffer()" class="primary">Reset Huruf</button>
+            </div>
+            <div class="video-container">
+                <video id="video" autoplay muted playsinline></video>
+                <canvas id="canvas"></canvas>
+            </div>
+            <div id="modelStatus" class="model-loading">Memuat model...</div>
+            <div id="spinner"></div>
+            <div id="outputText">Menunggu deteksi gestur...</div>
+            <div class="controls">
+                <button onclick="bookmarkTranslation()" class="primary">⭐ Simpan ke Favorit</button>
+            </div>
+        </section>
+
+        <section class="section">
+            <h2>Translator Sunda ↔ Indonesia</h2>
+            <div class="controls">
+                <label for="translateMode">Arah Terjemahan:</label>
+                <select id="translateMode">
+                    <option value="su-id">Sunda ➝ Indonesia</option>
+                    <option value="id-su">Indonesia ➝ Sunda</option>
+                </select>
+            </div>
+            <div class="controls">
+                <input type="text" id="inputDaerah" placeholder="Ketik teks di sini..." style="flex:1; padding:12px;">
+                <button onclick="translateDual()" class="primary">Terjemahkan</button>
+                <button onclick="clearTranslate()">Reset</button>
+            </div>
+            <div id="translatedText"></div>
+            <div class="controls">
+                <button onclick="bookmarkTranslationFromTranslate()" class="primary">⭐ Simpan Terjemahan</button>
+            </div>
+        </section>
+
+        <section class="section">
+            <h2>Favorit</h2>
+            <div class="controls">
+                <button onclick="showBookmarks()" class="primary">📚 Lihat Favorit</button>
+                <button onclick="exportBookmarks()">📤 Ekspor Favorit</button>
+            </div>
+            <div id="bookmarkList"></div>
+        </section>
+    </main>
+
+    <!-- TensorFlow.js -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.11.0"></script>
+    
+    <script>
+        // Konfigurasi
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const outputText = document.getElementById('outputText');
+        const modeSelect = document.getElementById('modeSelect');
+
+        // State aplikasi
+        let bufferText = '';
+        let lastPrediction = '';
+        let lastTime = 0;
+        let model = null;
+        let isModelLoaded = false;
+
+        // Kamus bahasa
+        const kamusKosakata = {
+            'halo': 'Halo, selamat datang',
+            'permisi': 'Permisi',
+            'terima kasih': 'Terima kasih',
+            'maaf': 'Maaf',
+            'tolong': 'Tolong',
+            'saya': 'Saya',
+            'kamu': 'Kamu',
+            'beli': 'Saya ingin beli',
+            'harga': 'Berapa harganya?',
+            'ini': 'Saya ingin yang ini',
+            'itu': 'Saya ingin yang itu',
+            'berapa': 'Berapa totalnya?',
+            'uang': 'Ini uangnya',
+            'kembalian': 'Ada kembalian?',
+            'cukup': 'Sudah cukup',
+            'tidak': 'Saya tidak mau',
+            'ya': 'Ya, saya mau'
+        };
+
+        // Kode untuk setiap huruf (sesuaikan dengan output model)
+        const abjadSIBI = {
+            0: 'A', 1: 'B', 2: 'C', 3: 'D', 4: 'E',
+            5: 'F', 6: 'G', 7: 'H', 8: 'I', 9: 'J',
+            10: 'K', 11: 'L', 12: 'M', 13: 'N', 14: 'O',
+            15: 'P', 16: 'Q', 17: 'R', 18: 'S', 19: 'T',
+            20: 'U', 21: 'V', 22: 'W', 23: 'X', 24: 'Y',
+            25: 'Z'
+        };
+
+        // Inisialisasi kamera
+        async function startCamera() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { 
+                        width: 640,
+                        height: 480,
+                        facingMode: 'user'
+                    } 
+                });
+                video.srcObject = stream;
+                
+                // Tunggu sampai video siap
+                await new Promise((resolve) => {
+                    video.onloadedmetadata = resolve;
+                });
+                
+                video.play();
+                
+                // Atur ukuran canvas sesuai video
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                
+                return true;
+            } catch (err) {
+                console.error("Error mengakses kamera: ", err);
+                updateModelStatus('error', 'Gagal mengakses kamera');
+                return false;
+            }
+        }
+
+        // Fungsi untuk memuat model TensorFlow.js
+        async function loadModel() {
+            updateModelStatus('loading', 'Memuat model...');
+            try {
+                // Ganti URL dengan path ke model.json Anda
+                const MODEL_URL = 'model/model.json';
+                model = await tf.loadGraphModel(MODEL_URL);
+                isModelLoaded = true;
+                updateModelStatus('ready', 'Model siap digunakan!');
+                console.log("Model Graph berhasil dimuat!");
+                return true;
+            } catch (error) {
+                console.error("Gagal memuat model:", error);
+                updateModelStatus('error', 'Gagal memuat model. Lihat konsol untuk detail.');
+                return false;
+            }
+        }
+
+        // Fungsi untuk mengupdate status model
+        function updateModelStatus(status, message) {
+            const statusDiv = document.getElementById('modelStatus');
+            statusDiv.className = `model-${status}`;
+            statusDiv.textContent = message;
+        }
+
+        // Fungsi untuk prediksi dari frame video
+        async function predictFrame() {
+            if (!isModelLoaded || !model) return;
+
+            // Preprocessing gambar
+            const tensor = tf.tidy(() => {
+                return tf.browser.fromPixels(video)
+                    .resizeNearestNeighbor([224, 224])  // Sesuaikan dengan input size model
+                    .toFloat()
+                    .div(255.0)
+                    .expandDims();
+            });
+
+            // Prediksi
+            const prediction = model.predict(tensor);
+            const results = await prediction.data();
+            tensor.dispose();
+            prediction.dispose();
+
+            // Ambil indeks kelas dengan probabilitas tertinggi
+            const maxIndex = results.indexOf(Math.max(...results));
+            return maxIndex;
+        }
+
+        // Loop untuk deteksi berkelanjutan
+        async function detectionLoop() {
+            if (modeSelect.value === 'alphabet' && isModelLoaded) {
+                const now = Date.now();
+                if (now - lastTime > 1000) {  // Deteksi setiap 1 detik
+                    try {
+                        const classIndex = await predictFrame();
+                        const gesture = abjadSIBI[classIndex] || '?';
+                        handleGesture(gesture);
+                        lastPrediction = gesture;
+                        lastTime = now;
+                    } catch (error) {
+                        console.error('Prediction error:', error);
+                    }
+                }
+            }
+            requestAnimationFrame(detectionLoop);
+        }
+
+        // Fungsi untuk menangani gestur
+        function handleGesture(gesture) {
+            const mode = modeSelect.value;
+            if (mode === 'word' && kamusKosakata[gesture]) {
+                outputText.innerText = kamusKosakata[gesture];
+                speak(kamusKosakata[gesture]);
+            } else if (mode === 'alphabet') {
+                bufferText += gesture;
+                outputText.innerText = bufferText;
+            } else {
+                outputText.innerText = gesture;
+            }
+        }
+
+        // Fungsi text-to-speech
+        function speak(text) {
+            if ('speechSynthesis' in window) {
+                const msg = new SpeechSynthesisUtterance();
+                msg.text = text; 
+                msg.lang = 'id-ID';
+                window.speechSynthesis.cancel();
+                window.speechSynthesis.speak(msg);
+            }
+        }
+
+        // Fungsi untuk menyimpan ke bookmark
+        function bookmarkTranslation() {
+            const text = outputText.innerText.trim();
+            if (!text) return;
+            let bookmarks = JSON.parse(localStorage.getItem("bookmarks")) || [];
+            if (!bookmarks.includes(text)) {
+                bookmarks.push(text);
+                localStorage.setItem("bookmarks", JSON.stringify(bookmarks));
+                alert("Ditambahkan ke Favorit!");
+            }
+        }
+
+        function bookmarkTranslationFromTranslate() {
+            const text = document.getElementById("translatedText").innerText.trim();
+            if (!text) return;
+            let bookmarks = JSON.parse(localStorage.getItem("bookmarks")) || [];
+            if (!bookmarks.includes(text)) {
+                bookmarks.push(text);
+                localStorage.setItem("bookmarks", JSON.stringify(bookmarks));
+                alert("Terjemahan ditambahkan ke Favorit!");
+            }
+        }
+
+        // Fungsi untuk menampilkan bookmark
+        function showBookmarks() {
+            let bookmarks = JSON.parse(localStorage.getItem("bookmarks")) || [];
+            const container = document.getElementById("bookmarkList");
+            container.innerHTML = '<h3>Daftar Favorit:</h3>';
+            if (!bookmarks.length) {
+                container.innerHTML += '<p>Belum ada data favorit.</p>';
+                return;
+            }
+            const list = document.createElement('ul');
+            bookmarks.forEach(item => {
+                const li = document.createElement('li');
+                li.className = 'bookmark-item';
+                li.innerHTML = `
+                    <span>${item}</span>
+                    <button onclick="removeBookmark('${item.replace(/'/g, "\\'")}')">❌ Hapus</button>
+                `;
+                list.appendChild(li);
+            });
+            container.appendChild(list);
+        }
+
+        // Fungsi untuk menghapus bookmark
+        function removeBookmark(item) {
+            let bookmarks = JSON.parse(localStorage.getItem("bookmarks")) || [];
+            bookmarks = bookmarks.filter(entry => entry !== item);
+            localStorage.setItem("bookmarks", JSON.stringify(bookmarks));
+            showBookmarks();
+        }
+
+        // Fungsi untuk ekspor bookmark
+        function exportBookmarks() {
+            let bookmarks = JSON.parse(localStorage.getItem("bookmarks")) || [];
+            const blob = new Blob([JSON.stringify(bookmarks, null, 2)], { type: "application/json" });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = 'bookmark_favorit.json';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        // Fungsi translator
+        async function translateDual() {
+            const input = document.getElementById("inputDaerah").value.trim();
+            const mode = document.getElementById("translateMode").value;
+
+            if (!input) {
+                document.getElementById("translatedText").innerText = 'Masukkan teks terlebih dahulu';
+                return;
+            }
+
+            const kamusSundaKeIndo = {
+                'hargana sabaraha': 'Harganya berapa?',
+                'badé mésér naon': 'Mau beli apa?',
+                'atos cekap': 'Sudah cukup',
+                'punten': 'Permisi',
+                'hatur nuhun': 'Terima kasih',
+                'kumaha damang': 'Apa kabar?',
+                'abdi hoyong ieu': 'Saya mau ini',
+                'teu aya kembalian': 'Tidak ada kembalian',
+                'di mana warungna': 'Di mana warungnya?',
+                'sabaraha harga sakumna': 'Berapa harga semuanya?',
+                'saha': 'Siapa?', 'kumaha': 'Bagaimana?', 'henteu': 'Tidak', 'ieu': 'Ini', 'eta': 'Itu'
+            };
+
+            const kamusIndoKeSunda = {
+                'berapa harganya': 'Sabaraha hargana?',
+                'mau beli apa': 'Badé mésér naon?',
+                'permisi': 'Punten',
+                'terima kasih': 'Hatur nuhun',
+                'apa kabar': 'Kumaha damang?',
+                'saya mau ini': 'Abdi hoyong ieu',
+                'tidak ada kembalian': 'Teu aya kembalian',
+                'di mana warungnya': 'Di mana warungna?',
+                'berapa harga semuanya': 'Sabaraha harga sakumna?'
+            };
+
+            let kamus = mode === 'su-id' ? kamusSundaKeIndo : kamusIndoKeSunda;
+            const inputLower = input.toLowerCase();
+
+            if (kamus[inputLower]) {
+                document.getElementById("translatedText").innerText = kamus[inputLower];
+            } else {
+                try {
+                    const response = await fetch(`https://translate.googleapis.com/translate_a/single?client=gtx&sl=${mode.split('-')[0]}&tl=${mode.split('-')[1]}&dt=t&q=${encodeURIComponent(input)}`);
+                    const data = await response.json();
+                    if (data && data[0] && data[0][0] && data[0][0][0]) {
+                        document.getElementById("translatedText").innerText = data[0][0][0];
+                    } else {
+                        document.getElementById("translatedText").innerText = 'Terjemahan tidak ditemukan';
+                    }
+                } catch (error) {
+                    console.error('Translation error:', error);
+                    document.getElementById("translatedText").innerText = 'Gagal mengakses Google Translate';
+                }
+            }
+        }
+
+        // Fungsi untuk mereset translator
+        function clearTranslate() {
+            document.getElementById("inputDaerah").value = '';
+            document.getElementById("translatedText").innerText = '';
+        }
+
+        // Fungsi untuk mereset buffer huruf
+        function clearBuffer() {
+            bufferText = '';
+            outputText.innerText = 'Menunggu deteksi gestur...';
+        }
+
+        // Ekspos fungsi ke global untuk event handler di HTML
+        window.removeBookmark = removeBookmark;
+        window.bookmarkTranslation = bookmarkTranslation;
+        window.bookmarkTranslationFromTranslate = bookmarkTranslationFromTranslate;
+        window.showBookmarks = showBookmarks;
+        window.exportBookmarks = exportBookmarks;
+        window.translateDual = translateDual;
+        window.clearTranslate = clearTranslate;
+        window.clearBuffer = clearBuffer;
+
+        // Inisialisasi aplikasi
+        async function initializeApp() {
+            // Mulai kamera
+            const cameraStarted = await startCamera();
+            if (!cameraStarted) return;
+
+            // Muat model
+            await loadModel();
+
+            // Mulai loop deteksi
+            detectionLoop();
+        }
+
+        // Jalankan aplikasi saat halaman dimuat
+        document.addEventListener('DOMContentLoaded', initializeApp);
+    </script>
+</body>
+</html>
